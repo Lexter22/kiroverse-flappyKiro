@@ -1,0 +1,12 @@
+{
+  "name": "flappy-kiro",
+  "version": "1.0.0",
+  "description": "A browser-based retro endless scroller game - Flappy Kiro",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/**/*.test.js"
+  },
+  "devDependencies": {
+    "fast-check": "^3.22.0"
+  }
+}

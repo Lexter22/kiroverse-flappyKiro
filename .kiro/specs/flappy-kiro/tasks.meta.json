@@ -1,0 +1,364 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1. Set up testing infrastructure and project tooling": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969016
+      },
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781875019483
+      },
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781876758730
+      }
+    ],
+    "2.1 Create `game-config.json` at the project root with documented defaults": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969167
+      },
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781875006569
+      },
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781876759067
+      }
+    ],
+    "2.2 Implement `DEFAULT_CONFIG`, `loadConfig()`, and `validateConfig()` in `game.js`": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969216
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781885650296
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890229986
+      }
+    ],
+    "3.1 Create `src/logic.js` and implement pure delta-time physics functions": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969254
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781885651634
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890230716
+      }
+    ],
+    "4.1 Implement pure collision functions in `src/logic.js`": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969302
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890241471
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890419960
+      }
+    ],
+    "5. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969367
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890469374
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890513131
+      }
+    ],
+    "6.1 Implement pure pipe functions in `src/logic.js`": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969403
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890531178
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890654106
+      }
+    ],
+    "7.1 Implement pure difficulty function in `src/logic.js`": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969442
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890532005
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890743920
+      }
+    ],
+    "8.1 Implement pure high-score and checkpoint functions in `src/logic.js`": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969500
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890532915
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890839560
+      }
+    ],
+    "9. Checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969536
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890976606
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891433630
+      }
+    ],
+    "10.1 Implement pure cloud factory in `src/logic.js`": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969573
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890533578
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890969331
+      }
+    ],
+    "11.1 Add reward animation state and logic": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969619
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890977245
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891434544
+      }
+    ],
+    "12.1 Create the sound design specification document `audio-assets.md`": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969667
+      },
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781875007503
+      },
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781876760780
+      }
+    ],
+    "12.2 Source/create the new `score.wav` asset": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969702
+      },
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781875008304
+      },
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781876760957
+      }
+    ],
+    "12.3 Add the three preloaded audio elements and playback covering all sounds": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969748
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890978393
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891435160
+      }
+    ],
+    "13.1 Implement the delta-time loop, config startup, and consume extracted logic": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969783
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891441890
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891756852
+      }
+    ],
+    "14. Final checkpoint - Ensure all tests pass": [
+      {
+        "executionId": "f0388743-209b-48ec-af5d-838f722bcae4",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781874969836
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891762318
+      },
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891823593
+      }
+    ],
+    "2. Create external configuration and the config loading system": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890230022
+      }
+    ],
+    "3. Extract pure ghost physics logic (delta-time, per-second units)": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890230740
+      }
+    ],
+    "4. Extract collision and hitbox logic": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890419991
+      }
+    ],
+    "6. Extract pipe spawning and scoring logic (distance-based spawning)": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890654139
+      }
+    ],
+    "7. Extract difficulty scaling logic (config-driven, per-second units)": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890743974
+      }
+    ],
+    "8. Extract high score and checkpoint logic": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890839604
+      }
+    ],
+    "10. Extract cloud initialization logic with parallax invariants": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781890969362
+      }
+    ],
+    "11. Implement the Reward System in `game.js`": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891434574
+      }
+    ],
+    "12. Implement the Audio System in `game.js`": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891435215
+      }
+    ],
+    "13. Wire delta-time game loop, config, and extracted logic into `game.js`": [
+      {
+        "executionId": "cd3a5195-024c-4f4c-9c97-fec6c9e24634",
+        "chatSessionId": "sess_0db2ca7b-e44b-4d90-89e6-eb885a05f7d6",
+        "timestamp": 1781891756931
+      }
+    ]
+  }
+}

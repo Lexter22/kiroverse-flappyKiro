@@ -4,7 +4,9 @@
 
 Flappy Kiro is a browser-based endless scroller game implemented in vanilla JavaScript with HTML5 Canvas. The player controls a ghost character that must navigate through gaps between vertically-scrolling pipe pairs. The game features a state machine (ready/playing/game over), progressive difficulty scaling, persistent high scores, and celebratory reward animations at score checkpoints.
 
-The architecture follows a single-file game engine pattern using an IIFE (Immediately Invoked Function Expression) to encapsulate all game logic. The game loop is driven by `requestAnimationFrame` for smooth 60fps rendering. All rendering is done procedurally on a 400×600 canvas — no external sprite sheets are required (the ghost is drawn with Canvas 2D primitives).
+The architecture follows a single-file game engine pattern using an IIFE (Immediately Invoked Function Expression) to encapsulate all game logic. The game loop is driven by `requestAnimationFrame` and uses **delta-time integration** so that physics are frame-rate independent — the elapsed time between frames is computed from the `requestAnimationFrame` timestamp and all motion is scaled by it. All rendering is done procedurally on a 400×600 canvas — no external sprite sheets are required (the ghost is drawn with Canvas 2D primitives).
+
+All tunable physics and gameplay parameters live in an external `game-config.json` file at the project root, loaded once at startup. A hardcoded fallback configuration object is embedded in `game.js` so the game remains fully playable offline or if the fetch fails.
 
 ### Key Design Decisions
 
@@ -12,6 +14,8 @@ The architecture follows a single-file game engine pattern using an IIFE (Immedi
 2. **Procedural rendering**: The ghost, pipes, clouds, and ground are drawn with Canvas 2D API calls rather than sprite images. This keeps the game lightweight and makes it easy to adjust visual parameters.
 3. **State enum pattern**: Game states are represented as numeric constants in a `STATE` object, with a single `state` variable controlling flow through the game loop.
 4. **Entity-as-object-literal**: Game entities (bird, pipes, clouds) are plain objects/arrays — no class hierarchy. This is appropriate for a small game with few entity types.
+5. **External configuration**: All tunable parameters are defined in `game-config.json` rather than as inline constants. This decouples balancing/tuning from code and lets designers adjust physics without touching `game.js`. An embedded default config guarantees the game still runs if the file is missing or invalid.
+6. **Delta-time physics**: Rather than assuming a fixed 60fps, physics integrate against the real elapsed time per frame. Velocities and accelerations are expressed in per-second units (px/s, px/s²), making behavior consistent across displays of any refresh rate.
 
 ## Architecture
 
@@ -63,15 +67,37 @@ The render order establishes the visual layering (back to front):
 
 ### Game Loop Controller
 
-The top-level orchestrator that calls `update()` and `render()` each frame via `requestAnimationFrame`.
+The top-level orchestrator that calls `update(dt)` and `render()` each frame via `requestAnimationFrame`. It computes `deltaTime` (in seconds) from the high-resolution timestamp supplied by `requestAnimationFrame`, and passes it into the physics update so all motion is frame-rate independent.
 
 ```javascript
-function gameLoop() {
-    update();
+let lastTime = 0;
+
+function gameLoop(timestamp) {
+    // First frame has no previous timestamp; seed it to avoid a huge dt
+    if (!lastTime) lastTime = timestamp;
+    let dt = (timestamp - lastTime) / 1000; // seconds elapsed
+    lastTime = timestamp;
+    // Clamp dt to avoid large jumps after tab switches / stalls
+    dt = Math.min(dt, MAX_FRAME_DT); // e.g. 0.05s (~20fps floor)
+
+    update(dt);
     render();
     requestAnimationFrame(gameLoop);
 }
 ```
+
+All velocity integration inside `update(dt)` multiplies by `dt`: position changes are `pos += velocity * dt` and velocity changes are `velocity += acceleration * dt`.
+
+### Configuration Loading
+
+At startup the game fetches `game-config.json` and merges it over the embedded default config. Loading is asynchronous; the game loop starts only after the config promise settles (success or failure), so gameplay always has a complete config.
+
+**Interface:**
+- `loadConfig()`: Returns a promise that resolves to the active config object. Attempts `fetch('game-config.json')`; on success parses and validates the JSON, then deep-merges it over `DEFAULT_CONFIG`. On fetch error, parse error, or validation failure, resolves with `DEFAULT_CONFIG` unchanged.
+- `validateConfig(obj)`: Checks that required numeric fields are present and finite; returns the merged config or falls back to defaults for any missing/invalid field.
+- `DEFAULT_CONFIG`: A hardcoded object embedded in `game.js` mirroring the structure of `game-config.json`, used as the fallback and as the merge base.
+
+The startup sequence is: `loadConfig()` → apply config to entity initial values and difficulty bounds → `initClouds()` → `requestAnimationFrame(gameLoop)`.
 
 ### State Manager
 
@@ -88,8 +114,8 @@ Controls game flow through three states:
 Manages the player character's physics and animation state.
 
 **Interface:**
-- `flap()`: Sets vertical velocity to `flapStrength`, triggers squish animation
-- Physics applied each frame: gravity accumulation, velocity clamping, rotation calculation, squish decay
+- `flap()`: Sets vertical velocity to `config.physics.jumpVelocity` (-300 px/s), triggers squish animation
+- Physics applied each frame (scaled by `dt`): gravity integration (`vy += gravity * dt`), velocity clamping to `maxVelocity`, position update (`y += vy * dt`), rotation calculation, squish decay
 
 ### Pipe Manager
 
@@ -97,7 +123,8 @@ Handles pipe lifecycle: spawning, scrolling, scoring detection, and cleanup.
 
 **Interface:**
 - `spawnPipe()`: Creates a new pipe pair at the right edge with randomized gap position
-- Pipes move left by `pipeSpeed` per frame
+- Pipes move left by `wallSpeed * dt` each frame (per-second scroll speed)
+- Spawning is **distance-based** rather than interval-based: a new pipe pair spawns when the most recently spawned pipe has moved `wallSpacing` pixels from the right edge (i.e., when `W - lastPipe.x >= wallSpacing`). This keeps horizontal spacing between pipes constant regardless of frame rate or scroll speed changes.
 - Score increments when pipe trailing edge passes bird x-position
 - Pipes are removed from array when fully off-screen
 
@@ -114,7 +141,7 @@ AABB (Axis-Aligned Bounding Box) collision detection with a forgiving inset.
 Progressive scaling of game parameters based on score milestones.
 
 **Interface:**
-- `applyDifficulty()`: Called after each score increment, adjusts `pipeSpeed`, `gapSize`, and `pipeInterval` based on `Math.floor(score / 5)`
+- `applyDifficulty()`: Called after each score increment, adjusts `wallSpeed` (px/s), `gapSize` (px), and `wallSpacing` (px) based on `Math.floor(score / 5)`, clamped to the per-second/pixel bounds defined in `config.difficulty`
 
 ### Cloud System
 
@@ -130,8 +157,8 @@ Pizza emoji celebration at score checkpoints (every 5 points).
 
 **Interface:**
 - `triggerReward()`: Starts a reward animation when a checkpoint is reached
-- Animation state: scale (0→1→1), fade (1→0), timer countdown
-- Rendered centered above ghost for ~1.5 seconds (90 frames at 60fps)
+- Animation state: scale (0→1→1), fade (1→0), time remaining countdown (seconds)
+- Rendered centered above ghost for ~1.5 seconds (countdown decremented by `dt` each frame)
 
 ### Effects System
 
@@ -150,15 +177,34 @@ Unified input routing for mouse click, touch, and keyboard (Space).
 
 ### Audio System (New)
 
-Sound effects for key game events.
+Sound effects for the three key game events: flap, score, and collision. The character and duration of each sound are defined in the sound design specification document [`audio-assets.md`](../../../audio-assets.md) at the project root.
+
+**Sound set:**
+
+| Event | File | Character | Approx. duration |
+|-------|------|-----------|------------------|
+| Flap | `jump.wav` | Whoosh | ~0.1 s |
+| Score (pipe pair passed) | `score.wav` | Chime | ~0.2 s |
+| Collision (game over) | `game_over.wav` | Thud | ~0.3 s |
+
+> **Note:** `score.wav` is a **new asset** that must be created/sourced (see `audio-assets.md` for its target character and duration). `jump.wav` and `game_over.wav` already exist in `assets/`.
+
+**Preloading:** At startup the Audio System creates one `Audio` element per sound and preloads all three (e.g., by setting `preload = 'auto'` and/or calling `.load()`), so that on a triggering event playback begins immediately without any further file loading.
+
+**Independent playback:** Each sound uses its **own separate `Audio` element**. Because the three sounds never share a single element, they can play independently and concurrently — triggering one sound never cancels or interrupts another (e.g., a score chime and a collision thud fired in the same window both play).
 
 **Interface:**
-- `playSound(audioElement)`: Resets and plays an audio element
-- Triggers: flap → `jump.wav`, game over → `game_over.wav`
+- `playSound(audioElement)`: Resets `audioElement.currentTime` to `0` (so a rapid re-trigger restarts the sound from the beginning rather than ignoring the call while it is still playing) and calls `audioElement.play()`, wrapping the returned promise in `.catch(() => {})` so that autoplay-policy blocks and missing/failed-to-load files fail silently without raising errors.
+- Triggers:
+  - flap → `playSound(flapSound)` (`jump.wav`)
+  - score increment after passing a pipe pair → `playSound(scoreSound)` (`score.wav`)
+  - game over → `playSound(collisionSound)` (`game_over.wav`)
 
 ## Data Models
 
 ### Bird State
+
+Physics values are sourced from `config.physics` and expressed in per-second units. The `vy` field is in px/s and is integrated against `dt`.
 
 ```javascript
 const bird = {
@@ -166,13 +212,19 @@ const bird = {
     y: 300,             // Vertical position (pixels, center)
     w: 34,              // Width for hitbox
     h: 28,              // Height for hitbox
-    vy: 0,              // Vertical velocity (pixels/frame)
-    gravity: 0.4,       // Gravity acceleration (pixels/frame²)
-    flapStrength: -7,   // Upward velocity on flap (negative = up)
-    maxVel: 10,         // Maximum downward velocity
+    vy: 0,              // Vertical velocity (pixels/second)
     rotation: 0,        // Current rotation angle (radians)
-    squish: 0           // Squish animation counter (frames remaining)
+    squish: 0           // Squish animation factor (decays over time)
 };
+
+// Physics parameters come from config (per-second units):
+//   gravity      = config.physics.gravity       // 800 px/s²
+//   jumpVelocity = config.physics.jumpVelocity   // -300 px/s (applied on flap)
+//   maxVelocity  = config.physics.maxVelocity    // clamp for downward vy
+
+// Integration each frame (dt in seconds):
+//   bird.vy = Math.min(bird.vy + gravity * dt, maxVelocity);
+//   bird.y += bird.vy * dt;
 ```
 
 ### Pipe Object
@@ -193,7 +245,7 @@ const bird = {
     y: 80,              // Vertical position (pixels)
     w: 100,             // Width (pixels)
     h: 35,              // Height (pixels)
-    speed: 0.5,         // Horizontal scroll speed (pixels/frame)
+    speed: 18,          // Horizontal scroll speed (pixels/second)
     opacity: 0.4        // Alpha transparency (0.2 - 0.6)
 }
 ```
@@ -203,53 +255,124 @@ const bird = {
 ```javascript
 {
     active: false,      // Whether animation is currently playing
-    timer: 0,          // Frames remaining (90 = 1.5 seconds at 60fps)
-    scale: 0,          // Current scale factor (0 → 1)
-    alpha: 1           // Current opacity (1 → 0)
+    timeLeft: 0,        // Seconds remaining (1.5 = full duration)
+    scale: 0,           // Current scale factor (0 → 1)
+    alpha: 1            // Current opacity (1 → 0)
 }
 ```
 
-### Difficulty Parameters
+### Configuration Object (loaded from `game-config.json`)
 
-```javascript
-// Base values (level 0)
-pipeSpeed: 2,          // pixels/frame
-gapSize: 150,          // pixels
-pipeInterval: 90,      // frames between spawns
+All tunable parameters are loaded from `game-config.json` at the project root and merged over the embedded `DEFAULT_CONFIG`. The structure below also serves as the default fallback. Physics values are in per-second units (px/s, px/s²); distances are in pixels.
 
-// Per-level adjustments (level = Math.floor(score / 5))
-pipeSpeed:    min(2 + level * 0.15, 4)
-gapSize:      max(150 - level * 3, 100)
-pipeInterval: max(90 - level * 3, 55)
+```json
+{
+  "canvas": {
+    "width": 400,
+    "height": 600,
+    "groundHeight": 60
+  },
+  "physics": {
+    "gravity": 800,
+    "jumpVelocity": -300,
+    "maxVelocity": 600
+  },
+  "walls": {
+    "speed": 120,
+    "gapSize": 140,
+    "spacing": 350,
+    "width": 52,
+    "capHeight": 20,
+    "capExtend": 4
+  },
+  "difficulty": {
+    "stepInterval": 5,
+    "speed":   { "base": 120, "step": 9,  "max": 240 },
+    "gapSize": { "base": 140, "step": 3,  "min": 100 },
+    "spacing": { "base": 350, "step": 9,  "min": 230 }
+  },
+  "reward": {
+    "checkpointInterval": 5,
+    "durationSeconds": 1.5,
+    "emoji": "🍕"
+  },
+  "clouds": {
+    "minCount": 3,
+    "maxCount": 5,
+    "minOpacity": 0.2,
+    "maxOpacity": 0.6,
+    "minSpeed": 7,
+    "maxSpeed": 36
+  },
+  "hitboxInset": 4
+}
 ```
 
-### Game Constants
+**Field reference:**
+
+| Path | Meaning | Unit |
+|------|---------|------|
+| `canvas.width` / `canvas.height` | Canvas render dimensions | px |
+| `canvas.groundHeight` | Ground / score bar height | px |
+| `physics.gravity` | Downward acceleration | px/s² |
+| `physics.jumpVelocity` | Velocity applied on flap (negative = up) | px/s |
+| `physics.maxVelocity` | Clamp for downward fall velocity | px/s |
+| `walls.speed` | Initial pipe scroll speed | px/s |
+| `walls.gapSize` | Initial vertical gap between pipes | px |
+| `walls.spacing` | Horizontal distance between spawned pipe pairs | px |
+| `walls.width` | Pipe body width | px |
+| `walls.capHeight` | Pipe cap height | px |
+| `walls.capExtend` | Cap extension beyond body each side | px |
+| `difficulty.stepInterval` | Points between difficulty steps | points |
+| `difficulty.speed` | `wallSpeed` base / per-level step / max | px/s |
+| `difficulty.gapSize` | `gapSize` base / per-level step / min | px |
+| `difficulty.spacing` | `wallSpacing` base / per-level step / min | px |
+| `reward.checkpointInterval` | Points between reward checkpoints | points |
+| `reward.durationSeconds` | Reward animation duration | s |
+| `clouds.*` | Count, opacity, and per-second speed bounds | mixed |
+| `hitboxInset` | Forgiving collision inset | px |
+
+### Difficulty Parameters (per-second / pixel terms)
+
+Difficulty is applied in discrete steps where `level = Math.floor(score / config.difficulty.stepInterval)`. Using the default config values:
 
 ```javascript
-const W = 400;                    // Canvas width
-const H = 600;                    // Canvas height
-const GROUND_H = 60;              // Ground/score bar height
-const PIPE_WIDTH = 52;            // Pipe body width
-const PIPE_CAP_H = 20;           // Pipe cap height
-const PIPE_CAP_EXTEND = 4;       // Cap extension beyond pipe body (each side)
-const HITBOX_INSET = 4;           // Forgiving collision inset (pixels)
-const REWARD_DURATION = 90;       // Reward animation frames (1.5s at 60fps)
-const CHECKPOINT_INTERVAL = 5;    // Points between checkpoints
+// level = Math.floor(score / 5)
+wallSpeed   = min(speed.base   + level * speed.step,   speed.max)    // min(120 + level*9,  240)  px/s
+gapSize     = max(gapSize.base - level * gapSize.step, gapSize.min)  // max(140 - level*3,  100)  px
+wallSpacing = max(spacing.base - level * spacing.step, spacing.min)  // max(350 - level*9,  230)  px
+```
+
+`wallSpeed` increases from 120 px/s up to 240 px/s; `gapSize` decreases from 140 px down to 100 px; `wallSpacing` decreases from 350 px down to 230 px. All three are monotonic in score and clamped to their bounds.
+
+### Runtime Constants Derived from Config
+
+```javascript
+const W = config.canvas.width;            // 400
+const H = config.canvas.height;           // 600
+const GROUND_H = config.canvas.groundHeight;  // 60
+const PIPE_WIDTH = config.walls.width;        // 52
+const PIPE_CAP_H = config.walls.capHeight;    // 20
+const PIPE_CAP_EXTEND = config.walls.capExtend;   // 4
+const HITBOX_INSET = config.hitboxInset;          // 4
+const REWARD_DURATION = config.reward.durationSeconds;  // 1.5 (seconds)
+const CHECKPOINT_INTERVAL = config.reward.checkpointInterval;  // 5
+const MAX_FRAME_DT = 0.05;   // Clamp for elapsed time per frame (~20fps floor)
 ```
 
 ## Correctness Properties
 
 *A property is a characteristic or behavior that should hold true across all valid executions of a system — essentially, a formal statement about what the system should do. Properties serve as the bridge between human-readable specifications and machine-verifiable correctness guarantees.*
 
-### Property 1: Gravity increases downward velocity with clamping
+### Property 1: Gravity integrates over delta-time with clamping
 
-*For any* ghost state with vertical velocity `vy`, applying one frame of gravity (without flap) SHALL result in vertical velocity equal to `min(vy + gravity, maxVel)`. The velocity never exceeds `maxVel`.
+*For any* ghost state with vertical velocity `vy` (px/s) and *any* elapsed time `dt > 0` seconds, applying gravity for that frame (without flap) SHALL result in vertical velocity equal to `min(vy + gravity * dt, maxVelocity)`, where `gravity = 800` px/s² and `maxVelocity` is the configured clamp. The velocity never exceeds `maxVelocity`.
 
 **Validates: Requirements 2.2, 2.3**
 
 ### Property 2: Flap sets upward velocity
 
-*For any* ghost state regardless of current vertical velocity, applying a flap SHALL set vertical velocity to exactly `flapStrength` (-7).
+*For any* ghost state regardless of current vertical velocity, applying a flap SHALL set vertical velocity to exactly `jumpVelocity` (-300 px/s).
 
 **Validates: Requirements 2.1**
 
@@ -261,7 +384,7 @@ const CHECKPOINT_INTERVAL = 5;    // Points between checkpoints
 
 ### Property 4: Pipe gap center stays within safe bounds
 
-*For any* spawned pipe pair given a `gapSize` and canvas dimensions, the gap center SHALL satisfy: `gapCenter >= gapSize/2 + PIPE_CAP_H + 20` AND `gapCenter <= H - GROUND_H - gapSize/2 - PIPE_CAP_H - 20`, ensuring both pipes have visible body above/below their caps.
+*For any* spawned pipe pair given a `gapSize` (default 140 px) and canvas dimensions, the gap center SHALL satisfy: `gapCenter >= gapSize/2 + PIPE_CAP_H + 20` AND `gapCenter <= H - GROUND_H - gapSize/2 - PIPE_CAP_H - 20`, ensuring both pipes have visible body above/below their caps.
 
 **Validates: Requirements 3.2, 3.3**
 
@@ -273,7 +396,7 @@ const CHECKPOINT_INTERVAL = 5;    // Points between checkpoints
 
 ### Property 6: Difficulty scaling is monotonic and bounded
 
-*For any* two scores where `scoreA < scoreB`, the difficulty parameters at `scoreB` SHALL be at least as hard as at `scoreA`: `pipeSpeed(B) >= pipeSpeed(A)`, `gapSize(B) <= gapSize(A)`, `pipeInterval(B) <= pipeInterval(A)`. Additionally, *for any* score, parameters SHALL remain within bounds: `pipeSpeed` in [2, 4], `gapSize` in [100, 150], `pipeInterval` in [55, 90].
+*For any* two scores where `scoreA < scoreB`, the difficulty parameters at `scoreB` SHALL be at least as hard as at `scoreA`: `wallSpeed(B) >= wallSpeed(A)`, `gapSize(B) <= gapSize(A)`, `wallSpacing(B) <= wallSpacing(A)`. Additionally, *for any* score, parameters SHALL remain within bounds: `wallSpeed` in [120, 240] px/s, `gapSize` in [100, 140] px, `wallSpacing` in [230, 350] px.
 
 **Validates: Requirements 9.1, 9.2, 9.3, 9.4**
 
@@ -297,9 +420,15 @@ const CHECKPOINT_INTERVAL = 5;    // Points between checkpoints
 
 ### Property 10: Cloud parallax invariants
 
-*For any* set of initialized clouds, the count SHALL be in [3, 5], each cloud's opacity SHALL be in [0.2, 0.6], each cloud's speed SHALL be in [0.2, 1.0], and clouds with lower opacity SHALL have lower or equal speed compared to clouds with higher opacity (simulating distance-based parallax).
+*For any* set of initialized clouds, the count SHALL be in [3, 5], each cloud's opacity SHALL be in [0.2, 0.6], each cloud's speed SHALL be in [7, 36] px/s, and clouds with lower opacity SHALL have lower or equal speed compared to clouds with higher opacity (simulating distance-based parallax).
 
 **Validates: Requirements 8.3, 8.4**
+
+### Property 11: Config loading falls back to defaults on failure
+
+*For any* outcome of the `game-config.json` fetch — success with valid JSON, fetch failure, malformed JSON, or JSON missing/with invalid (non-finite) numeric fields — `loadConfig()` SHALL resolve with a complete config object: a fully populated config equals the embedded `DEFAULT_CONFIG` for every field that is absent or invalid in the loaded file, and equals the loaded value only for fields that are present and valid. The resolved config SHALL never contain a missing or non-finite required field.
+
+**Validates: Requirements 1.1, 1.3**
 
 ## Error Handling
 
@@ -311,16 +440,25 @@ const CHECKPOINT_INTERVAL = 5;    // Points between checkpoints
 
 ### Audio Playback Failures
 
-- **Autoplay policy**: Browsers may block audio until user interaction. Audio play calls should be wrapped in `.catch(() => {})` to prevent unhandled promise rejections.
-- **Missing audio files**: If audio fails to load, the game continues without sound.
+- **Three independent sounds**: The audio set is `jump.wav` (flap), `score.wav` (score increment — a new asset), and `game_over.wav` (collision). All three use separate preloaded `Audio` elements and follow the same graceful-failure handling described below.
+- **Autoplay policy**: Browsers may block audio until user interaction. Every `playSound` call wraps the `play()` promise in `.catch(() => {})` to prevent unhandled promise rejections, and the game loop continues uninterrupted.
+- **Missing audio files**: If any audio file (including the newly added `score.wav`) is missing or fails to load, the `.catch(() => {})` swallows the error and the game continues without that sound. No game state depends on audio succeeding.
 
 ### Canvas Context
 
 - **Context unavailable**: If `getContext('2d')` returns `null`, the game cannot function. This is an unrecoverable error (extremely rare in modern browsers).
 
+### Configuration Loading Failures
+
+- **Fetch failure**: If `fetch('game-config.json')` rejects (offline, file served from `file://`, network error) or returns a non-OK status, `loadConfig()` resolves with the embedded `DEFAULT_CONFIG`. The game remains fully playable offline.
+- **Parse failure**: If the response body is not valid JSON, the parse error is caught and `DEFAULT_CONFIG` is used.
+- **Validation failure**: If the parsed object is missing required fields or contains non-finite numeric values, those fields fall back to their `DEFAULT_CONFIG` values via deep merge. A config that is partially valid keeps its valid fields and defaults the rest.
+
 ### Frame Timing
 
-- **requestAnimationFrame variance**: The game uses frame-count-based timing rather than delta-time. On displays above 60Hz, the game will run faster. This is acceptable for a casual game but noted as a known limitation.
+- **Delta-time integration**: The game derives `deltaTime` from the `requestAnimationFrame` timestamp and scales all physics by it, so behavior is consistent across 60Hz, 120Hz, and other refresh rates.
+- **Large gaps / stalls**: After a tab switch or stall the elapsed time can spike. `deltaTime` is clamped to `MAX_FRAME_DT` (0.05s, a ~20fps floor) to prevent the ghost from "teleporting" through pipes when a large frame gap occurs.
+- **First frame**: The first animation frame seeds `lastTime` from its own timestamp so the initial `deltaTime` is ~0 rather than the time since page load.
 
 ## Testing Strategy
 
@@ -334,6 +472,9 @@ Unit tests cover specific scenarios and edge cases:
 - **Game over effects**: Verify flash alpha and shake timer are set correctly
 - **Input routing**: Verify correct action is called for each state
 - **Local storage edge cases**: Null, NaN, quota exceeded scenarios
+- **Config merge**: Verify a valid partial config overrides only its fields and defaults the rest
+- **Delta-time integration**: Verify `bird.y` and `bird.vy` advance correctly for representative `dt` values (e.g., 1/60s, 1/120s)
+- **Score-sound trigger**: Verify `playSound(scoreSound)` (`score.wav`) is invoked when the score increments on passing a pipe pair, and that `currentTime` is reset to 0 on each trigger (mock the `Audio` element)
 
 ### Property-Based Tests
 
@@ -341,16 +482,17 @@ Property tests use `fast-check` to verify universal properties with generated in
 
 | Property | Generator Strategy |
 |----------|-------------------|
-| Property 1 (Gravity + clamping) | Random velocity in [-20, 20], verify min(vy+gravity, maxVel) |
-| Property 2 (Flap) | Random velocity in [-20, 20], verify result === flapStrength |
+| Property 1 (Gravity + clamping) | Random velocity in [-600, 600] px/s and random dt in (0, 0.05]s, verify `min(vy + gravity*dt, maxVelocity)` |
+| Property 2 (Flap) | Random velocity in [-600, 600] px/s, verify result === jumpVelocity (-300) |
 | Property 3 (AABB) | Random rectangles with varying positions/sizes, verify overlap formula |
-| Property 4 (Gap bounds) | Random gapSize in [100, 150], verify gapCenter within computed bounds |
+| Property 4 (Gap bounds) | Random gapSize in [100, 140], verify gapCenter within computed bounds |
 | Property 5 (Scoring once) | Random pipe x-positions relative to bird, verify single increment |
-| Property 6 (Difficulty monotone+bounded) | Random score pairs a < b, verify monotonicity and bounds |
+| Property 6 (Difficulty monotone+bounded) | Random score pairs a < b, verify monotonicity and per-second/pixel bounds |
 | Property 7 (High score) | Random score sequences, verify max and non-decreasing |
 | Property 8 (Reward trigger) | Random scores [1, 200], verify triggers iff score % 5 === 0 |
 | Property 9 (Hitbox inset) | Random ghost dimensions, verify computed hitbox dimensions |
-| Property 10 (Cloud parallax) | Random cloud arrays, verify count/opacity/speed bounds and correlation |
+| Property 10 (Cloud parallax) | Random cloud arrays, verify count/opacity/speed bounds (px/s) and correlation |
+| Property 11 (Config fallback) | Random partial/invalid config objects (missing fields, non-finite values, malformed input), verify merged result equals defaults for invalid fields and is always complete |
 
 **Test Configuration:**
 - Library: `fast-check`
@@ -360,8 +502,11 @@ Property tests use `fast-check` to verify universal properties with generated in
 ### Integration Tests
 
 - **Full game cycle**: Start game, simulate flaps, pass pipes, verify score increments
-- **Audio integration**: Verify sound plays on flap and game over (with user gesture)
+- **Audio integration**: Verify all three sounds play on their events — flap (`jump.wav`), score increment (`score.wav`), and game over (`game_over.wav`) — with a user gesture, and verify they play independently when triggered in the same window
 - **Local storage round-trip**: Write high score, reload, verify retrieval
+- **Config load (success)**: Serve a valid `game-config.json`, verify the game applies its values
+- **Config load (failure)**: Simulate a failed fetch, verify the game starts with `DEFAULT_CONFIG` and remains playable
+- **Frame-rate independence**: Run a fixed sequence of inputs at simulated 60fps and 120fps, verify the ghost reaches equivalent positions over the same elapsed time
 
 ### Manual Testing
 

@@ -2,10 +2,75 @@
 (function () {
     'use strict';
 
+    // ---------- CONFIGURATION ----------
+    // Config functions are loaded from src/config.js (FlappyConfig global)
+    var FlappyConfig = window.FlappyConfig;
+    var DEFAULT_CONFIG = FlappyConfig.DEFAULT_CONFIG;
+    var validateConfig = FlappyConfig.validateConfig;
+    var loadConfig = FlappyConfig.loadConfig;
+
+    // Pure logic functions from src/logic.js (FlappyLogic global)
+    var Logic = window.FlappyLogic;
+
+    // ---------- RUNTIME CONSTANTS (derived from config after load) ----------
+    let W, H, GROUND_H, PIPE_WIDTH, PIPE_CAP_H, PIPE_CAP_EXTEND, HITBOX_INSET;
+    let REWARD_DURATION, CHECKPOINT_INTERVAL;
+    const MAX_FRAME_DT = 0.05;
+
+    // Active config reference for difficultyFor and other config-driven logic
+    let activeConfig = DEFAULT_CONFIG;
+
+    // Physics parameters (per-second units, from config)
+    let gravity, jumpVelocity, maxVelocity;
+
+    function applyConfig(config) {
+        activeConfig = config;
+        W = config.canvas.width;
+        H = config.canvas.height;
+        GROUND_H = config.canvas.groundHeight;
+        PIPE_WIDTH = config.walls.width;
+        PIPE_CAP_H = config.walls.capHeight;
+        PIPE_CAP_EXTEND = config.walls.capExtend;
+        HITBOX_INSET = config.hitboxInset;
+        REWARD_DURATION = config.reward.durationSeconds;
+        CHECKPOINT_INTERVAL = config.reward.checkpointInterval;
+        gravity = config.physics.gravity;
+        jumpVelocity = config.physics.jumpVelocity;
+        maxVelocity = config.physics.maxVelocity;
+    }
+
+    // Apply defaults synchronously so canvas setup works immediately
+    applyConfig(DEFAULT_CONFIG);
+
+    // ---------- AUDIO SYSTEM ----------
+    // Create three separate preloaded Audio elements so sounds play independently/concurrently
+    const flapSound = new Audio('assets/jump.wav');
+    flapSound.preload = 'auto';
+    flapSound.load();
+
+    const scoreSound = new Audio('assets/score.wav');
+    scoreSound.preload = 'auto';
+    scoreSound.load();
+
+    const collisionSound = new Audio('assets/game_over.wav');
+    collisionSound.preload = 'auto';
+    collisionSound.load();
+
+    // Resets currentTime so rapid re-triggers restart from the beginning,
+    // wraps play() promise in .catch(() => {}) for autoplay-block and missing file safety
+    function playSound(audioElement) {
+        audioElement.currentTime = 0;
+        audioElement.play().catch(function () {});
+    }
+
+    // ---------- GHOST SPRITE ----------
+    const ghostImg = new Image();
+    ghostImg.src = 'assets/ghosty.png';
+    let ghostImgLoaded = false;
+    ghostImg.onload = function () { ghostImgLoaded = true; };
+
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
-    const W = canvas.width;   // 400
-    const H = canvas.height;  // 600
 
     // ---------- STATES ----------
     const STATE = { READY: 0, PLAYING: 1, GAME_OVER: 2 };
@@ -14,49 +79,72 @@
     // ---------- BIRD ----------
     const bird = {
         x: 80,
-        y: H / 2,
-        w: 34,
-        h: 28,
-        vy: 0,
-        gravity: 0.4,
-        flapStrength: -7,
-        maxVel: 10,
+        y: 300, // will be reset after config load
+        w: 40,
+        h: 40,
+        vy: 0,          // px/s (per-second units)
         rotation: 0,
-        squish: 0  // animation counter for flap squish
+        squish: 0       // animation counter for flap squish
     };
+
+    // Visual render size for the ghost sprite (larger than hitbox for visual appeal)
+    const GHOST_RENDER_SIZE = 52;
 
     // ---------- PIPES ----------
     let pipes = [];
-    const PIPE_WIDTH = 52;
-    const PIPE_CAP_H = 20;
-    let pipeSpeed = 2;
-    let gapSize = 150;
-    let pipeTimer = 0;
-    let pipeInterval = 90; // frames between spawns
+
+    // Difficulty-driven values (per-second / px units from difficultyFor)
+    let wallSpeed = 120;   // px/s
+    let gapSize = 140;     // px
+    let wallSpacing = 350; // px
 
     // ---------- GROUND ----------
-    const GROUND_H = 60;
     let groundX = 0;
 
     // ---------- CLOUDS ----------
     let clouds = [];
     function initClouds() {
-        clouds = [];
-        for (let i = 0; i < 5; i++) {
-            clouds.push({
-                x: Math.random() * W,
-                y: 40 + Math.random() * 200,
-                w: 60 + Math.random() * 80,
-                h: 25 + Math.random() * 20,
-                speed: 0.3 + Math.random() * 0.4
-            });
-        }
+        clouds = Logic.createClouds(Math.random, activeConfig);
     }
-    initClouds();
 
     // ---------- SCORING ----------
     let score = 0;
-    let highScore = parseInt(localStorage.getItem('flappyKiroHigh')) || 0;
+    let highScore = 0;
+
+    // Safe localStorage read
+    function loadHighScore() {
+        try {
+            highScore = Logic.parseHighScore(localStorage.getItem('flappyKiroHigh'));
+        } catch (e) {
+            highScore = 0;
+        }
+    }
+
+    // Safe localStorage write
+    function saveHighScore() {
+        try {
+            localStorage.setItem('flappyKiroHigh', highScore);
+        } catch (e) {
+            // silently continue
+        }
+    }
+
+    loadHighScore();
+
+    // ---------- REWARD ANIMATION ----------
+    const reward = {
+        active: false,      // Whether animation is currently playing
+        timeLeft: 0,        // Seconds remaining (1.5 = full duration)
+        scale: 0,           // Current scale factor (0 → 1)
+        alpha: 1            // Current opacity (1 → 0)
+    };
+
+    function triggerReward() {
+        reward.active = true;
+        reward.timeLeft = REWARD_DURATION;
+        reward.scale = 0;
+        reward.alpha = 1;
+    }
 
     // ---------- EFFECTS ----------
     let shakeTimer = 0;
@@ -89,13 +177,15 @@
     // ---------- GAME ACTIONS ----------
     function startGame() {
         state = STATE.PLAYING;
-        bird.vy = bird.flapStrength;
+        bird.vy = Logic.flapVelocity(jumpVelocity);
         bird.squish = 8;
+        playSound(flapSound);
     }
 
     function flap() {
-        bird.vy = bird.flapStrength;
+        bird.vy = Logic.flapVelocity(jumpVelocity);
         bird.squish = 8;
+        playSound(flapSound);
     }
 
     function resetGame() {
@@ -105,38 +195,32 @@
         bird.rotation = 0;
         bird.squish = 0;
         pipes = [];
-        pipeTimer = 0;
-        pipeSpeed = 2;
-        gapSize = 150;
-        pipeInterval = 90;
         score = 0;
+        // Reset difficulty to initial values
+        var diff = Logic.difficultyFor(0, activeConfig);
+        wallSpeed = diff.wallSpeed;
+        gapSize = diff.gapSize;
+        wallSpacing = diff.wallSpacing;
         shakeTimer = 0;
         flashAlpha = 0;
+        reward.active = false;
+        reward.timeLeft = 0;
+        reward.scale = 0;
+        reward.alpha = 0;
     }
 
     function gameOver() {
         state = STATE.GAME_OVER;
         shakeTimer = 15;
         flashAlpha = 0.6;
-        if (score > highScore) {
-            highScore = score;
-            localStorage.setItem('flappyKiroHigh', highScore);
-        }
-    }
-
-    // ---------- DIFFICULTY ----------
-    function applyDifficulty() {
-        const level = Math.floor(score / 5);
-        pipeSpeed = Math.min(2 + level * 0.15, 4);
-        gapSize = Math.max(150 - level * 3, 100);
-        pipeInterval = Math.max(90 - level * 3, 55);
+        playSound(collisionSound);
+        highScore = Logic.nextHighScore(highScore, score);
+        saveHighScore();
     }
 
     // ---------- PIPE SPAWNING ----------
     function spawnPipe() {
-        const minY = gapSize / 2 + PIPE_CAP_H + 20;
-        const maxY = H - GROUND_H - gapSize / 2 - PIPE_CAP_H - 20;
-        const gapCenter = minY + Math.random() * (maxY - minY);
+        var gapCenter = Logic.computeGapCenter(gapSize, H, GROUND_H, PIPE_CAP_H, Math.random());
         pipes.push({
             x: W,
             gapCenter: gapCenter,
@@ -145,7 +229,7 @@
     }
 
     // ---------- UPDATE ----------
-    function update() {
+    function update(dt) {
         if (state !== STATE.PLAYING) {
             // Animate bird hovering on ready screen
             if (state === STATE.READY) {
@@ -157,33 +241,49 @@
             return;
         }
 
-        // Bird physics
-        bird.vy += bird.gravity;
-        if (bird.vy > bird.maxVel) bird.vy = bird.maxVel;
-        bird.y += bird.vy;
+        // Bird physics (per-second units integrated with dt)
+        bird.vy = Logic.applyGravity(bird.vy, gravity, maxVelocity, dt);
+        bird.y = Logic.integratePosition(bird.y, bird.vy, dt);
 
-        // Rotation
-        bird.rotation = Math.min(Math.max(bird.vy * 0.08, -0.5), Math.PI / 2 * 0.8);
+        // Rotation based on velocity (scaled for per-second vy)
+        bird.rotation = Math.min(Math.max(bird.vy * 0.003, -0.5), Math.PI / 2 * 0.8);
 
         // Squish decay
         if (bird.squish > 0) bird.squish--;
 
-        // Pipe logic
-        pipeTimer++;
-        if (pipeTimer >= pipeInterval) {
-            pipeTimer = 0;
+        // Pipe spawning — distance-based
+        if (pipes.length === 0) {
             spawnPipe();
+        } else {
+            var lastPipe = pipes[pipes.length - 1];
+            if (Logic.shouldSpawn(lastPipe.x, W, wallSpacing)) {
+                spawnPipe();
+            }
         }
 
+        // Pipe movement and scoring
         for (let i = pipes.length - 1; i >= 0; i--) {
-            const p = pipes[i];
-            p.x -= pipeSpeed;
+            var p = pipes[i];
+            p.x -= wallSpeed * dt;
 
             // Scoring
-            if (!p.scored && p.x + PIPE_WIDTH < bird.x) {
-                p.scored = true;
-                score++;
-                applyDifficulty();
+            if (Logic.shouldScore(p, bird.x, PIPE_WIDTH)) {
+                var result = Logic.applyScore(p, score);
+                pipes[i] = result.pipe;
+                p = pipes[i];
+                score = result.score;
+                playSound(scoreSound);
+
+                // Update difficulty
+                var diff = Logic.difficultyFor(score, activeConfig);
+                wallSpeed = diff.wallSpeed;
+                gapSize = diff.gapSize;
+                wallSpacing = diff.wallSpacing;
+
+                // Trigger reward at checkpoints
+                if (Logic.isCheckpoint(score, CHECKPOINT_INTERVAL)) {
+                    triggerReward();
+                }
             }
 
             // Remove off-screen
@@ -192,16 +292,38 @@
             }
         }
 
-        // Ground scroll
-        groundX -= pipeSpeed;
+        // Ground scroll with dt
+        groundX -= wallSpeed * dt;
         if (groundX <= -24) groundX += 24;
 
-        // Cloud scroll
+        // Cloud scroll with dt
         for (let c of clouds) {
-            c.x -= c.speed;
+            c.x -= c.speed * dt;
             if (c.x + c.w < 0) {
                 c.x = W + Math.random() * 40;
-                c.y = 40 + Math.random() * 200;
+                c.y = Math.random() * (H * 0.4);
+            }
+        }
+
+        // Update reward animation
+        if (reward.active) {
+            reward.timeLeft -= dt;
+            if (reward.timeLeft <= 0) {
+                reward.active = false;
+                reward.timeLeft = 0;
+                reward.scale = 0;
+                reward.alpha = 0;
+            } else {
+                // Progress from 0 to 1 over the duration
+                var progress = 1 - (reward.timeLeft / REWARD_DURATION);
+                // Scale: quick scale-up in the first 30% of duration, then hold at 1
+                if (progress < 0.3) {
+                    reward.scale = progress / 0.3;
+                } else {
+                    reward.scale = 1;
+                }
+                // Alpha: fade from 1 to 0 over the full duration
+                reward.alpha = 1 - progress;
             }
         }
 
@@ -223,32 +345,24 @@
             bird.vy = 0;
         }
 
-        // Pipes (AABB with slight inset for forgiving hitbox)
-        const inset = 4;
-        const bx = bird.x - bird.w / 2 + inset;
-        const by = bird.y - bird.h / 2 + inset;
-        const bw = bird.w - inset * 2;
-        const bh = bird.h - inset * 2;
+        // Pipes (AABB with forgiving hitbox inset)
+        var hitbox = Logic.computeHitbox(bird.x, bird.y, bird.w, bird.h, HITBOX_INSET);
 
         for (const p of pipes) {
-            const topPipeBottom = p.gapCenter - gapSize / 2;
-            const bottomPipeTop = p.gapCenter + gapSize / 2;
+            var topPipeBottom = p.gapCenter - gapSize / 2;
+            var bottomPipeTop = p.gapCenter + gapSize / 2;
 
             // Top pipe rect
-            if (aabb(bx, by, bw, bh, p.x, 0, PIPE_WIDTH, topPipeBottom)) {
+            if (Logic.aabb(hitbox.x, hitbox.y, hitbox.w, hitbox.h, p.x, 0, PIPE_WIDTH, topPipeBottom)) {
                 gameOver();
                 return;
             }
             // Bottom pipe rect
-            if (aabb(bx, by, bw, bh, p.x, bottomPipeTop, PIPE_WIDTH, H - GROUND_H - bottomPipeTop)) {
+            if (Logic.aabb(hitbox.x, hitbox.y, hitbox.w, hitbox.h, p.x, bottomPipeTop, PIPE_WIDTH, H - GROUND_H - bottomPipeTop)) {
                 gameOver();
                 return;
             }
         }
-    }
-
-    function aabb(x1, y1, w1, h1, x2, y2, w2, h2) {
-        return x1 < x2 + w2 && x1 + w1 > x2 && y1 < y2 + h2 && y1 + h1 > y2;
     }
 
     // ---------- RENDER ----------
@@ -268,12 +382,13 @@
         drawGround();
         drawBird();
         drawUI();
+        drawReward();
 
         ctx.restore();
 
         // Flash overlay
         if (flashAlpha > 0) {
-            ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
+            ctx.fillStyle = 'rgba(255, 255, 255, ' + flashAlpha + ')';
             ctx.fillRect(0, 0, W, H);
         }
     }
@@ -289,8 +404,8 @@
     }
 
     function drawClouds() {
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
         for (const c of clouds) {
+            ctx.fillStyle = 'rgba(255, 255, 255, ' + c.opacity + ')';
             ctx.beginPath();
             ctx.ellipse(c.x + c.w / 2, c.y + c.h / 2, c.w / 2, c.h / 2, 0, 0, Math.PI * 2);
             ctx.fill();
@@ -319,9 +434,9 @@
             ctx.strokeRect(p.x, 0, PIPE_WIDTH, topH);
             // Top pipe cap
             ctx.fillStyle = '#73bf2e';
-            ctx.fillRect(p.x - 4, topH - PIPE_CAP_H, PIPE_WIDTH + 8, PIPE_CAP_H);
+            ctx.fillRect(p.x - PIPE_CAP_EXTEND, topH - PIPE_CAP_H, PIPE_WIDTH + PIPE_CAP_EXTEND * 2, PIPE_CAP_H);
             ctx.strokeStyle = '#558b2f';
-            ctx.strokeRect(p.x - 4, topH - PIPE_CAP_H, PIPE_WIDTH + 8, PIPE_CAP_H);
+            ctx.strokeRect(p.x - PIPE_CAP_EXTEND, topH - PIPE_CAP_H, PIPE_WIDTH + PIPE_CAP_EXTEND * 2, PIPE_CAP_H);
             // Highlight
             ctx.fillStyle = 'rgba(255,255,255,0.15)';
             ctx.fillRect(p.x + 6, 0, 8, topH - PIPE_CAP_H);
@@ -334,9 +449,9 @@
             ctx.strokeRect(p.x, bottomY, PIPE_WIDTH, bottomH);
             // Bottom pipe cap
             ctx.fillStyle = '#73bf2e';
-            ctx.fillRect(p.x - 4, bottomY, PIPE_WIDTH + 8, PIPE_CAP_H);
+            ctx.fillRect(p.x - PIPE_CAP_EXTEND, bottomY, PIPE_WIDTH + PIPE_CAP_EXTEND * 2, PIPE_CAP_H);
             ctx.strokeStyle = '#558b2f';
-            ctx.strokeRect(p.x - 4, bottomY, PIPE_WIDTH + 8, PIPE_CAP_H);
+            ctx.strokeRect(p.x - PIPE_CAP_EXTEND, bottomY, PIPE_WIDTH + PIPE_CAP_EXTEND * 2, PIPE_CAP_H);
             // Highlight
             ctx.fillStyle = 'rgba(255,255,255,0.15)';
             ctx.fillRect(p.x + 6, bottomY + PIPE_CAP_H, 8, bottomH - PIPE_CAP_H);
@@ -362,6 +477,13 @@
             ctx.lineTo(x + 12, H - GROUND_H + GROUND_H);
             ctx.stroke();
         }
+
+        // Score bar text in the dark footer: "Score: N | High: N"
+        ctx.font = 'bold 14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillText('Score: ' + score + ' | High: ' + highScore, W / 2, H - GROUND_H / 2);
     }
 
     function drawBird() {
@@ -377,56 +499,68 @@
         }
         ctx.scale(sx, sy);
 
-        // Ghost glow
-        ctx.shadowColor = 'rgba(200, 230, 255, 0.6)';
-        ctx.shadowBlur = 12;
+        if (ghostImgLoaded) {
+            // Draw the ghosty.png sprite centered, with glow effect
+            ctx.shadowColor = 'rgba(200, 230, 255, 0.6)';
+            ctx.shadowBlur = 14;
+            ctx.drawImage(ghostImg, -GHOST_RENDER_SIZE / 2, -GHOST_RENDER_SIZE / 2, GHOST_RENDER_SIZE, GHOST_RENDER_SIZE);
+            ctx.shadowBlur = 0;
+        } else {
+            // Fallback: procedural ghost drawing (scaled up)
+            var fallbackScale = GHOST_RENDER_SIZE / 34; // original was designed for ~34px wide
+            ctx.scale(fallbackScale, fallbackScale);
 
-        // Body
-        ctx.fillStyle = '#e8f4f8';
-        ctx.beginPath();
-        // Ghost shape: rounded top, wavy bottom
-        ctx.ellipse(0, -4, 15, 14, 0, Math.PI, 0);
-        // Wavy bottom
-        ctx.lineTo(15, 10);
-        ctx.quadraticCurveTo(12, 5, 9, 10);
-        ctx.quadraticCurveTo(6, 15, 3, 10);
-        ctx.quadraticCurveTo(0, 5, -3, 10);
-        ctx.quadraticCurveTo(-6, 15, -9, 10);
-        ctx.quadraticCurveTo(-12, 5, -15, 10);
-        ctx.closePath();
-        ctx.fill();
+            // Ghost glow
+            ctx.shadowColor = 'rgba(200, 230, 255, 0.6)';
+            ctx.shadowBlur = 12;
 
-        ctx.shadowBlur = 0;
+            // Body
+            ctx.fillStyle = '#e8f4f8';
+            ctx.beginPath();
+            // Ghost shape: rounded top, wavy bottom
+            ctx.ellipse(0, -4, 15, 14, 0, Math.PI, 0);
+            // Wavy bottom
+            ctx.lineTo(15, 10);
+            ctx.quadraticCurveTo(12, 5, 9, 10);
+            ctx.quadraticCurveTo(6, 15, 3, 10);
+            ctx.quadraticCurveTo(0, 5, -3, 10);
+            ctx.quadraticCurveTo(-6, 15, -9, 10);
+            ctx.quadraticCurveTo(-12, 5, -15, 10);
+            ctx.closePath();
+            ctx.fill();
 
-        // Ghost inner highlight
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.beginPath();
-        ctx.ellipse(-4, -8, 6, 5, -0.3, 0, Math.PI * 2);
-        ctx.fill();
+            ctx.shadowBlur = 0;
 
-        // Eyes
-        ctx.fillStyle = '#2d2d2d';
-        ctx.beginPath();
-        ctx.arc(-5, -4, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(5, -4, 3, 0, Math.PI * 2);
-        ctx.fill();
+            // Ghost inner highlight
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+            ctx.beginPath();
+            ctx.ellipse(-4, -8, 6, 5, -0.3, 0, Math.PI * 2);
+            ctx.fill();
 
-        // Eye highlights
-        ctx.fillStyle = '#ffffff';
-        ctx.beginPath();
-        ctx.arc(-4, -5, 1.2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(6, -5, 1.2, 0, Math.PI * 2);
-        ctx.fill();
+            // Eyes
+            ctx.fillStyle = '#2d2d2d';
+            ctx.beginPath();
+            ctx.arc(-5, -4, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(5, -4, 3, 0, Math.PI * 2);
+            ctx.fill();
 
-        // Mouth
-        ctx.fillStyle = '#2d2d2d';
-        ctx.beginPath();
-        ctx.ellipse(0, 3, 2.5, 1.5, 0, 0, Math.PI * 2);
-        ctx.fill();
+            // Eye highlights
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.arc(-4, -5, 1.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(6, -5, 1.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Mouth
+            ctx.fillStyle = '#2d2d2d';
+            ctx.beginPath();
+            ctx.ellipse(0, 3, 2.5, 1.5, 0, 0, Math.PI * 2);
+            ctx.fill();
+        }
 
         ctx.restore();
     }
@@ -496,13 +630,48 @@
         }
     }
 
+    function drawReward() {
+        if (!reward.active || reward.alpha <= 0) return;
+
+        ctx.save();
+        ctx.globalAlpha = reward.alpha;
+        ctx.font = (48 * reward.scale) + 'px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // Render pizza emoji centered above the ghost
+        ctx.fillText('\u{1F355}', bird.x, bird.y - 50);
+        ctx.restore();
+    }
+
     // ---------- GAME LOOP ----------
-    function gameLoop() {
-        update();
+    let lastTime = 0;
+
+    function gameLoop(timestamp) {
+        // First frame: seed lastTime so initial dt is ~0
+        if (!lastTime) lastTime = timestamp;
+        let dt = (timestamp - lastTime) / 1000; // seconds elapsed
+        lastTime = timestamp;
+        // Clamp dt to avoid large jumps after tab switches / stalls
+        dt = Math.min(dt, MAX_FRAME_DT);
+
+        update(dt);
         render();
         requestAnimationFrame(gameLoop);
     }
 
-    // Start
-    requestAnimationFrame(gameLoop);
+    // ---------- STARTUP ----------
+    // Start — load config first, then begin game loop
+    loadConfig().then(function (config) {
+        applyConfig(config);
+        // Set initial bird position from config dimensions
+        bird.y = H / 2;
+        // Set initial difficulty from config
+        var diff = Logic.difficultyFor(0, activeConfig);
+        wallSpeed = diff.wallSpeed;
+        gapSize = diff.gapSize;
+        wallSpacing = diff.wallSpacing;
+        // Initialize clouds using the logic module
+        initClouds();
+        requestAnimationFrame(gameLoop);
+    });
 })();

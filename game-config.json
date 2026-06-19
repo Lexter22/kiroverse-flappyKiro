@@ -1,0 +1,40 @@
+{
+  "canvas": {
+    "width": 400,
+    "height": 600,
+    "groundHeight": 60
+  },
+  "physics": {
+    "gravity": 800,
+    "jumpVelocity": -300,
+    "maxVelocity": 600
+  },
+  "walls": {
+    "speed": 120,
+    "gapSize": 140,
+    "spacing": 350,
+    "width": 52,
+    "capHeight": 20,
+    "capExtend": 4
+  },
+  "difficulty": {
+    "stepInterval": 5,
+    "speed": { "base": 120, "step": 9, "max": 240 },
+    "gapSize": { "base": 140, "step": 3, "min": 100 },
+    "spacing": { "base": 350, "step": 9, "min": 230 }
+  },
+  "reward": {
+    "checkpointInterval": 5,
+    "durationSeconds": 1.5,
+    "emoji": "🍕"
+  },
+  "clouds": {
+    "minCount": 3,
+    "maxCount": 5,
+    "minOpacity": 0.2,
+    "maxOpacity": 0.6,
+    "minSpeed": 7,
+    "maxSpeed": 36
+  },
+  "hitboxInset": 4
+}

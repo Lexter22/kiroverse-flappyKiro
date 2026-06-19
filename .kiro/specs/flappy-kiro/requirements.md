@@ -18,6 +18,8 @@ Flappy Kiro is a browser-based retro endless scroller game where the player guid
 - **Difficulty_System**: The mechanism that increases game challenge as the player's score rises
 - **Score_Checkpoint**: A milestone reached every 5 points that triggers a celebratory reward
 - **Reward_Animation**: A brief visual animation displaying a pizza emoji/icon when a Score_Checkpoint is reached
+- **Sound_Effect**: A short audio cue played in response to a key gameplay event (flap, score, or collision)
+- **Audio_System**: The mechanism responsible for preloading and playing Sound_Effects
 
 ## Requirements
 
@@ -145,3 +147,19 @@ Flappy Kiro is a browser-based retro endless scroller game where the player guid
 3. THE Reward_Animation SHALL scale up from 0 to full size and then fade out to create a celebratory bounce effect
 4. WHILE the Reward_Animation is playing, THE Game_Loop SHALL continue running without interruption
 5. THE Reward_Animation SHALL not obscure the Ghost or pipes in a way that causes unfair collisions
+
+### Requirement 12: Sound Effects
+
+**User Story:** As a player, I want to hear short audio cues for key gameplay events, so that the game feels more responsive and lively.
+
+#### Acceptance Criteria
+
+1. WHEN the Ghost flaps, THE Audio_System SHALL play a flap Sound_Effect (a whoosh of 0.1 seconds, within a ±0.05 second tolerance) loaded from the file "jump.wav", restarting playback from the beginning if the flap Sound_Effect is already playing
+2. WHEN the current score increments after the Ghost passes through a Pipe_Pair, THE Audio_System SHALL play a score Sound_Effect (a chime of 0.2 seconds, within a ±0.05 second tolerance) loaded from the file "score.wav", restarting playback from the beginning if the score Sound_Effect is already playing
+3. WHEN a game over occurs because the Ghost contacts a pipe or the ground, THE Audio_System SHALL play a collision Sound_Effect (a thud of 0.3 seconds, within a ±0.05 second tolerance) loaded from the file "game_over.wav", restarting playback from the beginning if the collision Sound_Effect is already playing
+4. WHEN the game loads, THE Audio_System SHALL preload all Sound_Effects so that, upon a triggering event, playback begins within 50 milliseconds without performing any additional file loading
+5. WHEN two or more different Sound_Effects are triggered within the same 50 millisecond window, THE Audio_System SHALL play each Sound_Effect independently without one cancelling or interrupting another
+6. IF browser autoplay policy blocks audio playback, THEN THE Game_Loop SHALL continue running without interruption and without raising errors
+7. IF a Sound_Effect file is missing or fails to load, THEN THE Game_Loop SHALL continue running without interruption and without raising errors
+8. THE Game_Loop SHALL convey all game state changes visually so that gameplay remains fully understandable when audio is unavailable
+9. THE Audio_System SHALL play Sound_Effects according to the character and duration defined in the sound design specification document "audio-assets.md"
