@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Update README on Project Changes",
+      "trigger": "Stop",
+      "action": {
+        "type": "agent",
+        "prompt": "An agent run just finished. If project source or configuration files changed during this run, update README.md so it accurately documents the current state of the project. Review the relevant source files (game.js, src/, index.html, style.css, game-config.json, package.json, and the spec under .kiro/specs/flappy-kiro/) and ensure the README covers: a project overview/description, features, how to run/play the game, the project structure, configuration options, and how to run tests. Ignore generated, vendored, or noisy files such as node_modules, package-lock.json, and anything under .git. Keep the README well-organized and only change what is needed to reflect the current code. If nothing relevant changed or the README is already accurate, make no changes."
+      }
+    }
+  ]
+}
