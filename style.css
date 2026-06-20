@@ -16,9 +16,6 @@ html, body {
 
 #game {
     display: block;
-    /* Scale to fill viewport while maintaining aspect ratio */
-    width: min(100vw, calc(100vh * 2 / 3));
-    height: min(100vh, calc(100vw * 3 / 2));
     border-radius: 8px;
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
 }
